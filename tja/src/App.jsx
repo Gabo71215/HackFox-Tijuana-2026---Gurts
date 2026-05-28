@@ -3,6 +3,10 @@ import { GoogleMap, useJsApiLoader, MarkerF } from "@react-google-maps/api";
 import { ensureAnonymousAuth } from "./lib/firebase";
 import { subscribeReports, createReport } from "./lib/reports";
 import { classifyBarrierPhoto } from "./lib/gemini";
+import RouteView from "./screens/RouteView";
+import DashboardView from "./screens/DashboardView";
+import CrewOptimizationView from "./screens/CrewOptimizationView";
+
 
 const B = "#691C32";
 const TIJUANA_CENTER = { lat: 32.5149, lng: -117.0382 };
@@ -76,6 +80,18 @@ export default function App() {
           </div>
         </div>
       )}
+      {screen === "route" && (
+        <RouteView profile={profile} goTo={setScreen} />
+      )}
+
+      {screen === "dashboard" && (
+        <DashboardView goTo={setScreen} />
+      )}
+
+      {screen === "crews" && (
+        <CrewOptimizationView goTo={setScreen} />
+      )}
+
       {screen==="map" && (
         <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
           <div style={{background:B,color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center"}}>
@@ -98,6 +114,9 @@ export default function App() {
               style={{width:"100%",background:B,color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:600,cursor:"pointer"}}>
               📸 Reportar barrera
             </button>
+              <button onClick={() => setScreen("route")}>Ruta accesible</button>
+              <button onClick={() => setScreen("dashboard")}>Panel SEDEBI</button>
+              <button onClick={() => setScreen("crews")}>Cuadrillas</button>
             <input ref={fileRef} type="file" accept="image/*" capture="environment"
               onChange={handlePhoto} style={{display:"none"}}/>
           </div>
