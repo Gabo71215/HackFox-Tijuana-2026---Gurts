@@ -93,7 +93,7 @@ export default function App() {
       )}
 
       {screen==="map" && (
-        <div style={{display:"flex",flexDirection:"column",height:"100vh"}}>
+        <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"auto"}}>
           <div style={{background:B,color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center"}}>
             <div>
               <div style={{fontWeight:700,fontSize:13}}>TIJUANA ACCESIBLE</div>
