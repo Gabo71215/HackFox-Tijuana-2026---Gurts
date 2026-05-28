@@ -6,7 +6,7 @@ import { classifyBarrierPhoto } from "./lib/gemini";
 import RouteView from "./RouteView";
 import DashboardView from "./DashboardView";
 import CrewOptimizationView from "./CrewOptimizationView";
-
+import TutorialRapido from "./TutorialRapido";
 
 const B = "#691C32";
 const TIJUANA_CENTER = { lat: 32.5149, lng: -117.0382 };
@@ -92,6 +92,10 @@ export default function App() {
         <CrewOptimizationView goTo={setScreen} />
       )}
 
+      {screen === "tutorial" && (
+        <TutorialRapido goTo={setScreen} />
+      )}
+
       {screen==="map" && (
         <div style={{display:"flex",flexDirection:"column",height:"100vh",overflow:"auto"}}>
           <div style={{background:B,color:"#fff",padding:"12px 16px",display:"flex",alignItems:"center"}}>
@@ -113,6 +117,9 @@ export default function App() {
             <button onClick={()=>fileRef.current?.click()}
               style={{width:"100%",background:B,color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:600,cursor:"pointer"}}>
               📸 Reportar barrera
+            </button>
+            <button onClick={() => setScreen("tutorial")} style={{width:"100%",marginTop:10,padding:12}}>
+             Tutorial rápido
             </button>
             <button onClick={() => setScreen("route")} style={{width:"100%",marginTop:10,padding:12}}>
               Ruta accesible
