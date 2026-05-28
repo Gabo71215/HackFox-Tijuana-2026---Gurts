@@ -68,7 +68,7 @@
               </div>
             ))}
 
-            <button onClick={() => setScreen("map")}
+            <button onClick={() => goTo("map")}
               style={{
                 width: "100%",
                 marginTop: 14,
