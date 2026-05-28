@@ -3,9 +3,9 @@ import { GoogleMap, useJsApiLoader, MarkerF } from "@react-google-maps/api";
 import { ensureAnonymousAuth } from "./lib/firebase";
 import { subscribeReports, createReport } from "./lib/reports";
 import { classifyBarrierPhoto } from "./lib/gemini";
-import RouteView from "./screens/RouteView";
-import DashboardView from "./screens/DashboardView";
-import CrewOptimizationView from "./screens/CrewOptimizationView";
+import RouteView from "./src/RouteView";
+import DashboardView from "./src/DashboardView";
+import CrewOptimizationView from "./src/CrewOptimizationView";
 
 
 const B = "#691C32";
