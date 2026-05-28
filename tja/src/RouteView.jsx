@@ -1,6 +1,6 @@
 // src/screens/RouteView.jsx
 import { useState } from "react";
-import { computeRoutes, rankAccessibleRoutes } from "../lib/routing";
+import { computeRoutes, rankAccessibleRoutes } from "./lib/routing";
 
 export default function RouteView({ profile, goTo }) {
   const [origin, setOrigin] = useState("");
