@@ -1,0 +1,35 @@
+[debug] [2026-05-28T19:21:14.706Z] ----------------------------------------------------------------------
+[debug] [2026-05-28T19:21:14.707Z] Command:       /opt/homebrew/Cellar/node/25.9.0/bin/node /opt/homebrew/bin/firebase init hosting
+[debug] [2026-05-28T19:21:14.707Z] CLI Version:   15.19.0
+[debug] [2026-05-28T19:21:14.707Z] Platform:      darwin
+[debug] [2026-05-28T19:21:14.707Z] Node Version:  v25.9.0
+[debug] [2026-05-28T19:21:14.707Z] Time:          Thu May 28 2026 12:21:14 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-05-28T19:21:14.707Z] ----------------------------------------------------------------------
+[debug] 
+[info] 
+     ######## #### ########  ######## ########     ###     ######  ########
+     ##        ##  ##     ## ##       ##     ##  ##   ##  ##       ##
+     ######    ##  ########  ######   ########  #########  ######  ######
+     ##        ##  ##    ##  ##       ##     ## ##     ##       ## ##
+     ##       #### ##     ## ######## ########  ##     ##  ######  ########
+
+You're about to initialize a Firebase project in this directory:
+
+  /Users/steff/Documents/GitHub/HackFox-Tijuana-2026---Gurts
+
+[info] 
+=== Project Setup
+[info] 
+[info] First, let's associate this project directory with a Firebase project.
+[info] You can create multiple project aliases by running firebase use --add, 
+[info] 
+[debug] [2026-05-28T19:33:28.802Z] ----------------------------------------------------------------------
+[debug] [2026-05-28T19:33:28.803Z] Command:       /opt/homebrew/Cellar/node/25.9.0/bin/node /opt/homebrew/bin/firebase deploy
+[debug] [2026-05-28T19:33:28.803Z] CLI Version:   15.19.0
+[debug] [2026-05-28T19:33:28.803Z] Platform:      darwin
+[debug] [2026-05-28T19:33:28.803Z] Node Version:  v25.9.0
+[debug] [2026-05-28T19:33:28.803Z] Time:          Thu May 28 2026 12:33:28 GMT-0700 (Pacific Daylight Time)
+[debug] [2026-05-28T19:33:28.803Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-28T19:53:29.963Z] Error: read EIO
+    at TTY.onStreamRead (node:internal/stream_base_commons:216:20)

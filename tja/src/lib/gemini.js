@@ -1,35 +1,19 @@
-// src/lib/gemini.js
-// Capa de IA. Gemini CLASIFICA, DESCRIBE e INTERPRETA. Nunca DECIDE accesibilidad
-// (eso lo hace accessibilityScore.js / routing.js de forma determinista).
-//
-// NOTA DE SEGURIDAD: para el hackathon llamamos Gemini desde el cliente con la key
-// de AI Studio. En producción esto va en una Cloud Function (functions/index.js)
-// para no exponer la key. Aquí está el camino rápido para el demo.
+const KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const BASE = "https://aiplatform.googleapis.com/v1/publishers/google/models";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+const TAXONOMIA = ["poste CFE en banqueta","cableado informal expuesto","banqueta rota o levantada","ausencia de rampa","desnivel banqueta-calle","obstáculo comercial (puesto, mercancía)","coladera sin tapa","escalera sin alternativa","obra sin señalización","vehículo bloqueando paso","otro"];
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
-
-// Taxonomía de barreras CONTEXTUALIZADA a Tijuana (no un template genérico).
-const TAXONOMIA = [
-  "poste CFE en banqueta", "cableado informal expuesto", "banqueta rota o levantada",
-  "ausencia de rampa", "desnivel banqueta-calle", "obstáculo comercial (puesto, mercancía)",
-  "coladera sin tapa", "transición banqueta-calle peligrosa", "escalera sin alternativa",
-  "obra sin señalización", "vehículo bloqueando paso", "otro",
-];
-
-const PROMPT_CLASIFICACION = `Eres un clasificador de barreras de accesibilidad urbana en Tijuana, México.
-Analiza la imagen y responde SOLO con JSON válido, sin markdown ni texto extra, con esta forma exacta:
-{
-  "categoria": "<una de: ${TAXONOMIA.join(" | ")}>",
-  "severidad": <entero 1-5, donde 5 es bloqueo total>,
-  "perfiles_afectados": ["<silla manual|silla electrica|muletas|baja vision|andador>", ...],
-  "descripcion_accesible": "<una frase corta describiendo el obstáculo y, si aplica, cómo rodearlo, para una persona con baja visión>",
-  "confianza": <numero 0-1>
+async function callGemini(model, parts) {
+  const res = await fetch(`${BASE}/${model}:generateContent`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": KEY },
+    body: JSON.stringify({ contents: [{ role: "user", parts }] }),
+  });
+  if (!res.ok) throw new Error(`Vertex ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 }
-No inventes. Si la imagen no muestra una barrera clara, usa categoria "otro" y confianza baja.`;
 
-// Convierte un File/Blob a la parte inline que espera Gemini.
 async function fileToInlinePart(file) {
   const base64 = await new Promise((res, rej) => {
     const r = new FileReader();
@@ -37,50 +21,32 @@ async function fileToInlinePart(file) {
     r.onerror = rej;
     r.readAsDataURL(file);
   });
-  return { inlineData: { data: base64, mimeType: file.type || "image/jpeg" } };
+  return { inlineData: { mimeType: file.type || "image/jpeg", data: base64 } };
 }
 
-// 1) CLASIFICACIÓN DE FOTO (Gemini Vision, modelo Flash = rápido y barato)
+const PROMPT = `Clasifica esta barrera de accesibilidad urbana en Tijuana. Responde SOLO JSON sin markdown:
+{"categoria":"<${TAXONOMIA.join("|")}>","severidad":<1-5>,"perfiles_afectados":["<silla manual|silla electrica|muletas|baja vision>"],"descripcion_accesible":"<frase corta>","confianza":<0-1>}`;
+
 export async function classifyBarrierPhoto(file) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const imagePart = await fileToInlinePart(file);
-  const result = await model.generateContent([PROMPT_CLASIFICACION, imagePart]);
-  const text = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text); // {categoria, severidad, perfiles_afectados, descripcion_accesible, confianza}
+  const text = await callGemini("gemini-2.5-flash", [{ text: PROMPT }, imagePart]);
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
-// 2) EXTRACCIÓN NLP DESDE VOZ (texto ya transcrito por Speech-to-Text)
-//    Para quien no puede o no sabe escribir: hablan y Gemini estructura.
 export async function extractBarrierFromText(transcript) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const prompt = `El usuario describió una barrera de accesibilidad por voz en Tijuana.
-Texto: "${transcript}"
-Responde SOLO JSON: {"categoria":"<${TAXONOMIA.join(" | ")}>","severidad":<1-5>,"perfiles_afectados":[...],"resumen":"<frase corta>"}`;
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().replace(/```json|```/g, "").trim();
-  return JSON.parse(text);
+  const prompt = `Barrera descrita por voz en Tijuana: "${transcript}". SOLO JSON: {"categoria":"...","severidad":<1-5>,"perfiles_afectados":[...],"resumen":"..."}`;
+  const text = await callGemini("gemini-2.5-flash", [{ text: prompt }]);
+  return JSON.parse(text.replace(/```json|```/g, "").trim());
 }
 
-// 3) VALIDACIÓN ANTI-MALICIOSOS (idea del equipo).
-//    Compara lo que Gemini ve en la foto vs lo que el usuario escribió.
-//    Si son muy distintos, el reporte se marca dudoso. (Versión simple por
-//    similitud léxica; la versión ML con embeddings va en el roadmap de Steff.)
 export function reportLooksValid(geminiCategoria, userText) {
-  if (!userText) return true; // si no escribió nada, no penalizamos
+  if (!userText) return true;
   const norm = (s) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   const a = new Set(norm(geminiCategoria).split(/\s+/));
   const b = new Set(norm(userText).split(/\s+/));
-  const inter = [...a].filter((w) => b.has(w)).length;
-  // si comparten al menos una palabra clave, lo damos por consistente
-  return inter > 0;
+  return [...a].filter((w) => b.has(w)).length > 0;
 }
 
-// 4) REPORTE EJECUTIVO SEMANAL (Gemini Pro, para el dashboard SEDEBI)
 export async function generateExecutiveReport(stats) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-  const prompt = `Eres analista de movilidad urbana. Con estos datos agregados de la semana, escribe un
-reporte ejecutivo de máximo 4 frases para un director de SEDEBI (Ayuntamiento de Tijuana). Sé concreto,
-prioriza acciones, menciona números. Datos: ${JSON.stringify(stats)}`;
-  const result = await model.generateContent(prompt);
-  return result.response.text();
+  return callGemini("gemini-2.5-pro", [{ text: `Reporte ejecutivo SEDEBI Tijuana, máx 4 frases, con números: ${JSON.stringify(stats)}` }]);
 }
