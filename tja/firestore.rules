@@ -1,0 +1,25 @@
+rules_version = '2';
+// firestore.rules
+// Separación de accesos:
+//  - reportes: cualquier usuario ANÓNIMO puede crear y leer (app ciudadana pública).
+//  - agregados/dashboard: SOLO usuarios con custom claim "directivo" (panel SEDEBI privado).
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // App ciudadana — pública y anónima
+    match /reportes/{id} {
+      allow read: if true;                       // todos ven el mapa
+      allow create: if request.auth != null      // anónimo basta
+                    && request.resource.data.severidad is int
+                    && request.resource.data.severidad >= 1
+                    && request.resource.data.severidad <= 5;
+      allow update, delete: if false;            // nadie edita/borra desde el cliente
+    }
+
+    // Datos agregados para SEDEBI — privado, solo directivos
+    match /agregados/{id} {
+      allow read: if request.auth != null && request.auth.token.directivo == true;
+      allow write: if false;                     // solo Cloud Functions escriben aquí
+    }
+  }
+}
