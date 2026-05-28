@@ -103,7 +103,7 @@ export default function App() {
               {PROFILES.find(p=>p.id===profile)?.icon} {PROFILES.find(p=>p.id===profile)?.label}
             </span>
           </div>
-          <GoogleMap mapContainerStyle={{flex:1,width:"100%"}} center={TIJUANA_CENTER} zoom={13}
+          <GoogleMap mapContainerStyle={{height:"55vh",width:"100%"}} center={TIJUANA_CENTER} zoom={13}
             options={{disableDefaultUI:true,zoomControl:true}}>
             {reports.map(r => (
               <MarkerF key={r.id} position={{lat:r.lat,lng:r.lng}} label={{text:"!",color:"#fff",fontWeight:"700"}}/>
@@ -114,9 +114,17 @@ export default function App() {
               style={{width:"100%",background:B,color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:600,cursor:"pointer"}}>
               📸 Reportar barrera
             </button>
-              <button onClick={() => setScreen("route")}>Ruta accesible</button>
-              <button onClick={() => setScreen("dashboard")}>Panel SEDEBI</button>
-              <button onClick={() => setScreen("crews")}>Cuadrillas</button>
+            <button onClick={() => setScreen("route")} style={{width:"100%",marginTop:10,padding:12}}>
+              Ruta accesible
+            </button>
+
+            <button onClick={() => setScreen("dashboard")} style={{width:"100%",marginTop:10,padding:12}}>
+              Panel SEDEBI
+            </button>
+
+            <button onClick={() => setScreen("crews")} style={{width:"100%",marginTop:10,padding:12}}>
+              Cuadrillas
+            </button>
             <input ref={fileRef} type="file" accept="image/*" capture="environment"
               onChange={handlePhoto} style={{display:"none"}}/>
           </div>
