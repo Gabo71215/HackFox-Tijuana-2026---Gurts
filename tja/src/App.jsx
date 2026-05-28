@@ -107,6 +107,21 @@ export default function App() {
               {PROFILES.find(p=>p.id===profile)?.icon} {PROFILES.find(p=>p.id===profile)?.label}
             </span>
           </div>
+
+          <div style={{background:B,color:"#fff",padding:"16px",position:"relative",display:"flex",alignItems:"center",justifyContent:"center",minHeight:70}}>
+
+            <button
+              onClick={() => setScreen("home")}
+              style={{position:"absolute",left:16,display:"flex",alignItems:"center",gap:6,border:"none",borderRadius:999,background:"rgba(255,255,255,.15)",color:"#fff",padding:"8px 14px",fontSize:13,fontWeight:700,cursor:"pointer"}}
+            >
+              ← Inicio
+            </button>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontWeight:800}}>♿ TIJUANA ACCESIBLE</div>
+              <div style={{fontSize:11,opacity:.75}}>Tutorial rápido · App ciudadana</div>
+            </div>
+
+          </div>
           <GoogleMap mapContainerStyle={{height:"55vh",width:"100%"}} center={TIJUANA_CENTER} zoom={13}
             options={{disableDefaultUI:true,zoomControl:true}}>
             {reports.map(r => (
