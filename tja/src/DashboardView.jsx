@@ -315,20 +315,13 @@ export default function DashboardView({ goTo }) {
             <h3 style={{ margin: 0, fontSize: 14 }}>📊 Looker Studio — reporte oficial</h3>
             <span style={{ fontSize: 10, background: BL, color: B, borderRadius: 99, padding: "3px 10px", fontWeight: 700 }}>Solo directivos</span>
           </div>
-          <div style={{ background: "#fafafa", border: "2px dashed #e0d4d7", borderRadius: 10, padding: 20, textAlign: "center", color: "#999", fontSize: 12 }}>
-            <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
-            <div style={{ fontWeight: 600, color: "#666", marginBottom: 4 }}>Pendiente: agregar URL de Looker Studio</div>
-            <div>Sigue los pasos en <strong>LOOKER_STUDIO.md</strong> para obtener el link de embed.<br />
-              Reemplaza el placeholder en este componente y listo.</div>
-          </div>
-          {/* Cuando tengas la URL, descomenta esto:
           <iframe
             title="Dashboard Looker Studio"
-            src="https://lookerstudio.google.com/embed/reporting/TU_ID_AQUI/page/1"
+            src="https://datastudio.google.com/embed/reporting/35172117-b7c6-45cb-9972-d2de4f42f925/page/pFgzF"
             width="100%" height="600"
             style={{ border: 0, borderRadius: 10, marginTop: 8 }}
             allowFullScreen
-          /> */}
+          />
         </div>
 
         {/* Línea de continuidad ADBC */}
