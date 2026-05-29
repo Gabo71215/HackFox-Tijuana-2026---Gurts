@@ -9,6 +9,7 @@ import {
   Truck, BarChart2, Bot, RefreshCw, Send, LogOut, Monitor, Smartphone,
   MapPin, Loader2, Volume2, ArrowRight, TrendingUp, Sparkles,
   ChevronRight, HelpCircle, Crosshair, Layers, X, Play, Compass,
+  Bus, Globe, Apple, Construction,
 } from "lucide-react";
 import { ensureAnonymousAuth } from "./lib/firebase";
 import { subscribeReports, createReport } from "./lib/reports";
@@ -106,6 +107,38 @@ export default function App() {
   const [adminMode, setAdminMode] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [reports, setReports] = useState(() => loadLocal());
+  const [preloadedDest, setPreloadedDest] = useState(null); // 🆕 destino del link de WhatsApp
+
+  // Leer query params del link que manda el WhatsApp Bot
+  // Formato: ?to=lat,lng&dest=Nombre&from=lat,lng  (con destino específico)
+  //          ?route=1                              (solo abrir en pestaña ruta)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const to = params.get("to");
+    const dest = params.get("dest");
+    const from = params.get("from");
+    const routeOnly = params.get("route");
+
+    if (to) {
+      const [lat, lng] = to.split(",").map(Number);
+      if (!isNaN(lat) && !isNaN(lng)) {
+        const destObj = { lat, lng, name: dest || "Destino" };
+        let originObj = null;
+        if (from) {
+          const [fLat, fLng] = from.split(",").map(Number);
+          if (!isNaN(fLat) && !isNaN(fLng)) originObj = { lat: fLat, lng: fLng };
+        }
+        setPreloadedDest({ dest: destObj, origin: originObj, autoGPS: !originObj });
+        setProfile("silla_manual");
+        setTab("route");
+      }
+    } else if (routeOnly === "1") {
+      // Llegó del bot pero sin destino — saltar a Ruta y pedir GPS
+      setPreloadedDest({ autoGPS: true });
+      setProfile("silla_manual");
+      setTab("route");
+    }
+  }, []);
 
   useEffect(() => {
     ensureAnonymousAuth().then(() => {
@@ -128,7 +161,7 @@ export default function App() {
         {tab === "map"       && <MapView reports={reports} />}
         {tab === "report"    && <ReportView reports={reports} setReports={setReports} />}
         {tab === "voice"     && <VoiceView reports={reports} setReports={setReports} />}
-        {tab === "route"     && <RouteView profile={profile} reports={reports} />}
+        {tab === "route"     && <RouteView profile={profile} reports={reports} preloadedDest={preloadedDest} />}
         {tab === "assistant" && <AssistantView reports={reports} />}
       </Layout>
       {showTutorial && <TutorialSheet onClose={() => setShowTutorial(false)} />}
@@ -525,7 +558,7 @@ function VoiceView({ reports, setReports }) {
 }
 
 // ── ROUTE VIEW · con Places Autocomplete + Elevation + Navegación turn-by-turn ──
-function RouteView({ profile, reports }) {
+function RouteView({ profile, reports, preloadedDest }) {
   const originRef = useRef(null);
   const destRef = useRef(null);
   const acOriginRef = useRef(null);
@@ -543,6 +576,35 @@ function RouteView({ profile, reports }) {
   const [stdPath, setStdPath] = useState([]);
   const [tab, setTab] = useState("accessible");
   const [navigating, setNavigating] = useState(false);
+  const [fromWhatsApp, setFromWhatsApp] = useState(false);
+
+  // Pre-cargar destino que llegó desde el bot de WhatsApp
+  useEffect(() => {
+    if (!preloadedDest) return;
+    const { dest: d, origin: o, autoGPS } = preloadedDest;
+    if (d) {
+      setDest(d);
+      if (destRef.current) destRef.current.value = d.name;
+      setFromWhatsApp(true);
+    }
+    if (o) {
+      setOrigin(o);
+      if (originRef.current) originRef.current.value = "Origen del link";
+    } else if (autoGPS) {
+      // Auto-pedir ubicación
+      setFromWhatsApp(true);
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            setOrigin({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            if (originRef.current) originRef.current.value = "Mi ubicación";
+          },
+          () => setError("Permite la ubicación para autocompletar tu origen."),
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      }
+    }
+  }, [preloadedDest]);
 
   useEffect(() => {
     const opts = { componentRestrictions: { country: "mx" }, fields: ["geometry", "formatted_address", "name"] };
@@ -716,6 +778,16 @@ function RouteView({ profile, reports }) {
           {busy ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite", marginRight: 6 }} />Calculando rutas y pendiente…</> : <><Navigation size={14} style={{ marginRight: 6 }} />Comparar rutas</>}
         </button>
 
+        {fromWhatsApp && (
+          <div style={{
+            background: "#E7F8EE", border: "1px solid #A8D5B5", borderRadius: 12,
+            padding: "10px 14px", marginBottom: 10, fontSize: 12, color: "#1A6B3A",
+            display: "flex", alignItems: "center", gap: 8, fontWeight: 600,
+          }}>
+            <span style={{ fontSize: 18 }}>💬</span>
+            Ruta desde WhatsApp — destino pre-cargado. Solo toca <b>Aquí</b> para origen y <b>Comparar rutas</b>.
+          </div>
+        )}
         {error && <div style={{ marginTop: 8, padding: 10, background: "#FFEBEE", color: RED, borderRadius: 10, fontSize: 12, fontWeight: 500 }}>{error}</div>}
       </div>
 
@@ -783,6 +855,66 @@ function RouteView({ profile, reports }) {
                 }}>
                   <Play size={16} fill="#fff" /> Iniciar navegación
                 </button>
+
+                {/* Deeplinks a apps externas de mapas */}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 10, color: INK_3, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+                    O abre en otra app
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {/* Moovit — DESHABILITADO */}
+                    <button
+                      onClick={() => alert("Feature en construcción.\n\nMoovit aún no tiene cobertura de transporte público accesible en Tijuana. Lo activaremos cuando el SITT publique GTFS abierto.")}
+                      className="tap"
+                      style={{
+                        flex: 1, padding: "10px 8px", borderRadius: 10,
+                        border: `1px solid ${HAIRLINE}`, background: SURFACE_2,
+                        color: INK_3, fontSize: 12, fontWeight: 600, textAlign: "center",
+                        cursor: "pointer", opacity: 0.65,
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      <Bus size={18} strokeWidth={1.8} />
+                      <span>Moovit</span>
+                    </button>
+
+                    {/* Google Maps */}
+                    <a
+                      href={origin
+                        ? `https://www.google.com/maps/dir/?api=1&origin=${origin.lat},${origin.lng}&destination=${dest.lat},${dest.lng}&travelmode=walking`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${dest.lat},${dest.lng}&travelmode=walking`}
+                      target="_blank" rel="noopener noreferrer" className="tap"
+                      style={{
+                        flex: 1, padding: "10px 8px", borderRadius: 10,
+                        border: `1px solid ${HAIRLINE}`, background: "#fff",
+                        color: INK, fontSize: 12, fontWeight: 600, textAlign: "center",
+                        textDecoration: "none", cursor: "pointer",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      <Globe size={18} strokeWidth={1.8} />
+                      <span>Google Maps</span>
+                    </a>
+
+                    {/* Apple Maps */}
+                    <a
+                      href={origin
+                        ? `https://maps.apple.com/?saddr=${origin.lat},${origin.lng}&daddr=${dest.lat},${dest.lng}&dirflg=w`
+                        : `https://maps.apple.com/?daddr=${dest.lat},${dest.lng}&dirflg=w`}
+                      target="_blank" rel="noopener noreferrer" className="tap"
+                      style={{
+                        flex: 1, padding: "10px 8px", borderRadius: 10,
+                        border: `1px solid ${HAIRLINE}`, background: "#fff",
+                        color: INK, fontSize: 12, fontWeight: 600, textAlign: "center",
+                        textDecoration: "none", cursor: "pointer",
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+                      }}
+                    >
+                      <Apple size={18} strokeWidth={1.8} />
+                      <span>Apple Maps</span>
+                    </a>
+                  </div>
+                </div>
               </div>
             );
           })()}
@@ -849,7 +981,7 @@ function AssistantView({ reports }) {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text:
-`Eres el asistente de accesibilidad de Tijuana Accesible (app del Ayuntamiento de Tijuana). Tienes acceso a la ubicación del usuario y a los reportes ciudadanos de barreras. Responde en español, breve y útil. Si el usuario pregunta cómo llegar a un lugar, sugiere la pestaña "Ruta" de la app. Si pregunta dónde reportar algo, sugiere las pestañas "Foto" o "Voz". Da datos concretos con distancia cuando puedas. La troncal del SITT es la única línea de transporte accesible de Tijuana (rampas, piso táctil, abordaje a nivel). Las calafias NO son accesibles.
+`Eres el asistente de accesibilidad de Tijuana Accesible (app del Ayuntamiento de Tijuana). Tienes acceso a la ubicación del usuario y a los reportes ciudadanos de barreras. Responde en español, breve y útil. Si el usuario pregunta cómo llegar a un lugar, sugiere la pestaña "Ruta" de la app — ahí calculamos la ruta accesible certificada con pendiente real y barreras evitadas, y también ofrecemos abrir directo en SITT (transporte público accesible de Tijuana), Google Maps o Apple Maps. Si pregunta dónde reportar algo, sugiere las pestañas "Foto" o "Voz". Da datos concretos con distancia cuando puedas. La troncal del SITT (Centro-Insurgentes, 47 estaciones) es la única línea de transporte accesible de Tijuana (rampas, piso táctil, abordaje a nivel). Las calafias NO son accesibles.
 ${context}
 Pregunta del usuario: "${q}"` }] }] }),
       });
