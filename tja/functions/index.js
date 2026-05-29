@@ -87,7 +87,13 @@ exports.syncToSheets = onDocumentCreated(
     const data = event.data?.data();
     if (!data) return;
 
-    const sa = JSON.parse(SHEETS_SA_KEY.value());
+    let sa;
+    try {
+      sa = JSON.parse(SHEETS_SA_KEY.value());
+    } catch (e) {
+      console.error("Error parsing SHEETS_SA_KEY:", e.message);
+      return;
+    }
     const auth = new google.auth.GoogleAuth({
       credentials: sa,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"],

@@ -16,7 +16,7 @@ cp .env.example .env   # luego rellena .env con tus llaves (pasos de abajo)
 ```
 
 ---
-
+   
 ## 1. Proyecto de Google Cloud + Firebase  (5 min)
 1. Crea un proyecto en https://console.firebase.google.com (ej. `tijuana-accesible`).
    Esto crea automáticamente el proyecto de Google Cloud asociado.
