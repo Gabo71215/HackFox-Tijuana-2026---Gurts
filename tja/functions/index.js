@@ -63,9 +63,22 @@ exports.clasificarBarrera = onCall({ secrets: [GEMINI_KEY] }, async (request) =>
 
   const genAI = new GoogleGenerativeAI(GEMINI_KEY.value());
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-  const prompt = `Clasifica esta barrera de accesibilidad urbana en Tijuana. Responde SOLO JSON:
-{"categoria":"...","severidad":<1-5>,"perfiles_afectados":[...],"descripcion_accesible":"...","confianza":<0-1>}`;
+  const prompt = `
+  Clasifica esta barrera de accesibilidad urbana en Tijuana.
 
+  Responde SOLO JSON válido:
+
+  {
+    "categoria":"...",
+    "severidad":1-5,
+    "perfiles_afectados":["..."],
+    "descripcion_accesible":"...",
+    "keywords":["...","...","..."],
+    "confianza":0-1
+  }
+
+  Las keywords deben ser palabras simples del objeto detectado y la barrera.
+  `;
   const result = await model.generateContent([
     prompt,
     { inlineData: { data: imageBase64, mimeType: mimeType || "image/jpeg" } },

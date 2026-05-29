@@ -30,26 +30,80 @@ export default function App() {
   const [result, setResult] = useState(null);
   const fileRef = useRef(null);
   const [selectedColonia, setSelectedColonia] = useState(null);
+  const [userDescription, setUserDescription] = useState("");
+  const [validationError, setValidationError] = useState("");
 
   useEffect(() => {
     ensureAnonymousAuth().then(() => subscribeReports(setReports));
   }, []);
+  
+  function isDescriptionValid(userText, keywords = []) {
+    if (!userText?.trim()) return false;
+
+    // Si Gemini no devolvió keywords, permitir reporte
+    if (!keywords.length) return true;
+
+    const normalized = userText.toLowerCase();
+
+    // cuántas palabras coinciden
+    let matches = 0;
+
+    for (const word of keywords) {
+      if (normalized.includes(word.toLowerCase())) {
+        matches++;
+      }
+    }
+
+    // permitir si al menos una coincide
+    return matches >= 1;
+  }
 
   const handlePhoto = useCallback(async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setBusy(true); setResult(null);
+
+    setBusy(true);
+    setResult(null);
+
     try {
       const gps = await getGps();
+      setValidationError("");
       const classification = await classifyBarrierPhoto(file);
+
+      const isValid = isDescriptionValid(
+        userDescription,
+        classification.keywords || []
+      );
+
+
+      if (!isValid) {
+        setValidationError(
+          `La IA detectó: ${classification.keywords?.join(", ")}`
+        );
+
+        setBusy(false);
+        return;
+      }
+
       setResult({ ...classification, gps });
+
+      await createReport({
+        file,
+        gps,
+        classification,
+        userDescription,
+        valid: true,
+      });
+
       setBusy(false);
-      createReport({ file, gps, classification, valid: true }).catch(err => console.error("Save:", err));
+
     } catch (err) {
       alert("Error: " + err.message);
       setBusy(false);
     }
-  }, []);
+  }, [userDescription]);
+
+
 
   if (!isLoaded) return <div style={{display:"grid",placeItems:"center",height:"100vh",color:B}}>Cargando…</div>;
 
@@ -168,7 +222,56 @@ export default function App() {
               </InfoWindowF>
             )}
             </GoogleMap>
+
+          <div style={{
+            padding: "12px",
+            background: "#fff",
+            borderTop: "1px solid #eee"
+          }}>
+            <div style={{
+              fontSize: 13,
+              fontWeight: 700,
+              marginBottom: 8,
+              color: "#3a0f1a"
+            }}>
+              Describe el obstáculo detectado
+            </div>
+
+            <textarea
+              placeholder="Ejemplo: poste bloqueando banqueta"
+              value={userDescription}
+              onChange={(e) => setUserDescription(e.target.value)}
+              style={{
+                width: "100%",
+                minHeight: 80,
+                borderRadius: 12,
+                padding: 12,
+                border: "2px solid #E5D3D8",
+                marginBottom: 12,
+                fontSize: 14,
+                boxSizing: "border-box",
+                resize: "none",
+                outline: "none"
+              }}
+            />
+          </div>
+
+
           <div style={{padding:12,borderTop:"1px solid #F5E6EA"}}>
+            {validationError && (
+              <div style={{
+                background: "#FDECEC",
+                color: "#B3261E",
+                padding: 12,
+                borderRadius: 10,
+                marginBottom: 12,
+                fontSize: 13,
+                fontWeight: 600,
+                border: "1px solid #F5C2C0"
+              }}>
+                ⚠️ {validationError}
+              </div>
+            )}
             <button onClick={()=>fileRef.current?.click()}
               style={{width:"100%",background:B,color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:600,cursor:"pointer"}}>
               📸 Reportar barrera
