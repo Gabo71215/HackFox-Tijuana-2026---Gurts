@@ -1,103 +1,125 @@
 // src/lib/routing.js
-// Ruteo multimodal + scoring de accesibilidad de rutas. DETERMINISTA.
-// Usa Routes API (a pie/transporte/auto) y Elevation API (pendientes).
-// La decisión de "ruta accesible" la toma esta lógica, NO Gemini.
+// Ruteo accesible: Google Routes API + Elevation API + ranking por barreras y pendiente.
+// Lo que los amigos importan: computeRoutes, rankAccessibleRoutes, elevationProfile, maxSlopePct.
 
-const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
-const ELEVATION_URL = "https://maps.googleapis.com/maps/api/elevation/json";
-const KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-// Pesos de penalización por perfil de movilidad. Mayor = la barrera duele más.
-const PERFIL_PESOS = {
-  silla_manual:    { barreraSevera: 100, pendiente: 8, sinRampa: 60 },
-  silla_electrica: { barreraSevera: 80,  pendiente: 4, sinRampa: 50 },
-  muletas:         { barreraSevera: 60,  pendiente: 6, sinRampa: 20 },
-  baja_vision:     { barreraSevera: 70,  pendiente: 1, sinRampa: 10 },
+// Pesos del ranking por perfil — ajustables
+const PROFILE_WEIGHTS = {
+  silla_manual:    { severas: 6.0, slope: 4.0, dist: 0.001 },
+  silla_electrica: { severas: 4.0, slope: 2.0, dist: 0.0008 },
+  muletas:         { severas: 5.0, slope: 3.0, dist: 0.001 },
+  baja_vision:     { severas: 5.0, slope: 1.0, dist: 0.0006 },
 };
 
-// 1) Pide rutas alternativas a Google (a pie por default).
+// Distancia Haversine en metros
+export function distH(a, b) {
+  const R = 6371000, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const x = Math.sin(dLat/2)**2 + Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+// Decode polyline encoded — fallback si no usamos geoJsonLinestring
+export function decodePoly(encoded) {
+  if (!encoded) return [];
+  const points = []; let index = 0, lat = 0, lng = 0;
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    shift = 0; result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += ((result & 1) ? ~(result >> 1) : (result >> 1));
+    points.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return points;
+}
+
+// Extrae path [{lat,lng}] de una route de Routes API
+export function extractPath(route) {
+  const coords = route?.polyline?.geoJsonLinestring?.coordinates;
+  if (coords?.length) return coords.map(([lng, lat]) => ({ lat, lng }));
+  // fallback a encoded
+  return decodePoly(route?.polyline?.encodedPolyline);
+}
+
+// Llamar Routes API y devolver array de routes
 export async function computeRoutes(origin, destination, travelMode = "WALK") {
-  const body = {
-    origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
-    destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
-    travelMode, // "WALK" | "TRANSIT" | "DRIVE"
-    computeAlternativeRoutes: true,
-    polylineEncoding: "GEO_JSON_LINESTRING",
-  };
-  const res = await fetch(ROUTES_URL, {
+  const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Goog-Api-Key": KEY,
-      // pedir solo los campos que usamos = más barato
-      "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline,routes.legs",
+      "X-Goog-Api-Key": MAPS_KEY,
+      "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
+      destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lng } } },
+      travelMode,
+      computeAlternativeRoutes: true,
+      polylineEncoding: "GEO_JSON_LINESTRING",
+    }),
   });
-  if (!res.ok) throw new Error("Routes API: " + res.status);
+  if (!res.ok) throw new Error(`Routes API ${res.status}`);
   const data = await res.json();
   return data.routes || [];
 }
 
-// 2) Pendiente de una serie de puntos (Elevation API).
+// Llamada a Google Elevation API — sample de puntos a lo largo de la ruta
+// Returns array of {elevation, location:{lat,lng}}
 export async function elevationProfile(points) {
-  const locations = points.map((p) => `${p.lat},${p.lng}`).join("|");
-  const res = await fetch(`${ELEVATION_URL}?locations=${locations}&key=${KEY}`);
-  const data = await res.json();
-  return (data.results || []).map((r) => r.elevation);
-}
-
-// Calcula pendiente máxima (%) a partir de un perfil de elevación y distancia.
-export function maxSlopePct(elevations, distanceMeters) {
-  if (elevations.length < 2 || !distanceMeters) return 0;
-  const seg = distanceMeters / (elevations.length - 1);
-  let max = 0;
-  for (let i = 1; i < elevations.length; i++) {
-    const slope = Math.abs(elevations[i] - elevations[i - 1]) / seg * 100;
-    if (slope > max) max = slope;
-  }
-  return Math.round(max * 10) / 10;
-}
-
-// 3) Penaliza cada ruta según barreras que cruza, pendiente y perfil del usuario.
-//    barriers = lista de {lat, lng, severidad, sinRampa} desde Firestore.
-//    Devuelve las rutas ordenadas de la más accesible a la menos.
-export function rankAccessibleRoutes(routes, barriers, profile, slopesByRoute) {
-  const pesos = PERFIL_PESOS[profile] || PERFIL_PESOS.silla_manual;
-  const scored = routes.map((route, idx) => {
-    const coords = route.polyline?.geoJsonLinestring?.coordinates || [];
-    let penal = 0, severasEnRuta = 0;
-    for (const b of barriers) {
-      if (nearAnySegment(b, coords, 25)) { // 25 m de tolerancia
-        if ((b.severidad || 0) >= 4) { penal += pesos.barreraSevera; severasEnRuta++; }
-        else penal += pesos.barreraSevera * 0.3;
-        if (b.sinRampa) penal += pesos.sinRampa;
+  if (!window.google?.maps?.ElevationService) return [];
+  const svc = new window.google.maps.ElevationService();
+  return new Promise((resolve) => {
+    svc.getElevationAlongPath(
+      { path: points.map(p => new window.google.maps.LatLng(p.lat, p.lng)), samples: Math.min(64, Math.max(8, points.length)) },
+      (results, status) => {
+        if (status === "OK" && results) resolve(results.map(r => ({
+          elevation: r.elevation,
+          location: { lat: r.location.lat(), lng: r.location.lng() }
+        })));
+        else resolve([]);
       }
-    }
-    const slope = slopesByRoute?.[idx] || 0;
-    penal += slope * pesos.pendiente;
-    return {
-      route,
-      durationSec: parseInt(route.duration) || 0,
-      distanceMeters: route.distanceMeters || 0,
-      slopePct: slope,
-      severasEnRuta,
-      penal,
-    };
+    );
   });
-  return scored.sort((a, b) => a.penal - b.penal); // menor penalización primero
 }
 
-// distancia aprox punto-a-polilínea (metros), versión simple para hackathon.
-function nearAnySegment(point, coords, tolMeters) {
-  for (const [lng, lat] of coords) {
-    if (haversine(point.lat, point.lng, lat, lng) <= tolMeters) return true;
+// Calcular pendiente máxima entre samples consecutivos (en %)
+export function maxSlopePct(elevSamples, totalDistMeters) {
+  if (!elevSamples?.length || elevSamples.length < 2) return 0;
+  const segDist = totalDistMeters / (elevSamples.length - 1);
+  let maxPct = 0;
+  for (let i = 1; i < elevSamples.length; i++) {
+    const dh = Math.abs(elevSamples[i].elevation - elevSamples[i-1].elevation);
+    const pct = segDist > 0 ? (dh / segDist) * 100 : 0;
+    if (pct > maxPct) maxPct = pct;
   }
-  return false;
+  return Math.round(maxPct * 10) / 10;
 }
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371000, toRad = (d) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+// Cuenta barreras severas (sev >= minSev) cerca de la ruta (<thresholdM)
+export function countNearbyBarriers(route, reports, minSev = 4, thresholdM = 30) {
+  const path = extractPath(route);
+  if (!path.length) return 0;
+  return reports.filter(r =>
+    (r.severidad || 0) >= minSev &&
+    r.lat && r.lng &&
+    path.some(p => distH(p, r) < thresholdM)
+  ).length;
+}
+
+// Rankea rutas por (severasEnRuta, slope, distancia), según perfil
+export function rankAccessibleRoutes(routes, barriers, profile = "silla_manual", slopeMap = {}) {
+  const w = PROFILE_WEIGHTS[profile] || PROFILE_WEIGHTS.silla_manual;
+  return routes
+    .map((r, idx) => {
+      const severas = countNearbyBarriers(r, barriers, 4, 30);
+      const slope = slopeMap[idx] || 0;
+      const dist = r.distanceMeters || 0;
+      const dur = parseInt(r.duration || "0", 10);
+      const cost = w.severas * severas + w.slope * slope + w.dist * dist;
+      return { route: r, idx, severasEnRuta: severas, slopePct: slope, distanceMeters: dist, durationSec: dur, cost };
+    })
+    .sort((a, b) => a.cost - b.cost);
 }
