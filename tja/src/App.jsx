@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { GoogleMap, useJsApiLoader, MarkerF } from "@react-google-maps/api";
+import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from "@react-google-maps/api";
 import { ensureAnonymousAuth } from "./lib/firebase";
 import { subscribeReports, createReport } from "./lib/reports";
 import { classifyBarrierPhoto } from "./lib/gemini";
@@ -7,6 +7,7 @@ import RouteView from "./RouteView";
 import DashboardView from "./DashboardView";
 import CrewOptimizationView from "./CrewOptimizationView";
 import TutorialRapido from "./TutorialRapido";
+import { COLONIAS_CON_SCORE, scoreColor } from "./lib/accessibilityScore";
 
 const B = "#691C32";
 const TIJUANA_CENTER = { lat: 32.5149, lng: -117.0382 };
@@ -28,6 +29,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const fileRef = useRef(null);
+  const [selectedColonia, setSelectedColonia] = useState(null);
 
   useEffect(() => {
     ensureAnonymousAuth().then(() => subscribeReports(setReports));
@@ -127,7 +129,45 @@ export default function App() {
             {reports.map(r => (
               <MarkerF key={r.id} position={{lat:r.lat,lng:r.lng}} label={{text:"!",color:"#fff",fontWeight:"700"}}/>
             ))}
-          </GoogleMap>
+            {COLONIAS_CON_SCORE.map((c) => (
+              <MarkerF
+                key={c.nombre}
+                position={{ lat: c.lat, lng: c.lng }}
+                onClick={() => setSelectedColonia(c)}
+                title={`${c.nombre} · Accessibility Score ${c.score}`}
+                icon={{
+                  path: window.google.maps.SymbolPath.CIRCLE,
+                  scale: 22,
+                  fillColor: scoreColor(c.score),
+                  fillOpacity: 0.75,
+                  strokeWeight: 2,
+                  strokeColor: "#ffffff",
+                }}
+                label={{
+                  text: `${c.score}`,
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "700",
+                }}
+              />
+            ))}
+
+            {selectedColonia && (
+              <InfoWindowF
+                position={{ lat: selectedColonia.lat, lng: selectedColonia.lng }}
+                onCloseClick={() => setSelectedColonia(null)}
+              >
+                <div style={{ padding: 6, maxWidth: 180 }}>
+                  <div style={{ fontWeight: 800, color: "#3a0f1a" }}>
+                    {selectedColonia.nombre}
+                  </div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>
+                    Accessibility Score: <b>{selectedColonia.score}/100</b>
+                  </div>
+                </div>
+              </InfoWindowF>
+            )}
+            </GoogleMap>
           <div style={{padding:12,borderTop:"1px solid #F5E6EA"}}>
             <button onClick={()=>fileRef.current?.click()}
               style={{width:"100%",background:B,color:"#fff",border:"none",borderRadius:10,padding:13,fontSize:14,fontWeight:600,cursor:"pointer"}}>
