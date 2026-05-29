@@ -1,6 +1,6 @@
-// src/App.jsx — Tijuana Accesible · v3
+// src/App.jsx — Tijuana Accesible · v2
 // Apple/iOS 26 Liquid Glass · integra: Places Autocomplete, Elevation API,
-// banquetas OSM, TutorialRapido, folios TJA-, NAVEGACIÓN TURN-BY-TURN con voz.
+// banquetas OSM coloreadas, TutorialRapido como sheet, folios TJA- en cuadrillas.
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { GoogleMap, useJsApiLoader, MarkerF, Polyline, CircleF } from "@react-google-maps/api";
 import {
@@ -524,7 +524,8 @@ function VoiceView({ reports, setReports }) {
   );
 }
 
-// ── ROUTE VIEW · con Places Autocomplete + Elevation + Navegación turn-by-turn ──
+// ── ROUTE VIEW · con Places Autocomplete + Elevation + Quick destinos ─────
+
 function RouteView({ profile, reports }) {
   const originRef = useRef(null);
   const destRef = useRef(null);
@@ -542,7 +543,7 @@ function RouteView({ profile, reports }) {
   const [accPath, setAccPath] = useState([]);
   const [stdPath, setStdPath] = useState([]);
   const [tab, setTab] = useState("accessible");
-  const [navigating, setNavigating] = useState(false);
+  const [navigating, setNavigating] = useState(false); // 🆕 modo navegación
 
   useEffect(() => {
     const opts = { componentRestrictions: { country: "mx" }, fields: ["geometry", "formatted_address", "name"] };
@@ -655,7 +656,7 @@ function RouteView({ profile, reports }) {
     }
   };
 
-  // Modo navegación turn-by-turn fullscreen
+  // 🆕 Si está en modo navegación, renderiza overlay completo
   if (navigating) {
     return (
       <NavigationMode
@@ -774,6 +775,7 @@ function RouteView({ profile, reports }) {
                   </div>
                 </div>
 
+                {/*  Botón "Iniciar navegación" */}
                 <button onClick={() => setNavigating(true)} className="tap" style={{
                   width: "100%", marginTop: 14, padding: "12px 16px",
                   background: color, color: "#fff", border: "none", borderRadius: 12,
@@ -792,7 +794,8 @@ function RouteView({ profile, reports }) {
   );
 }
 
-// ── ASSISTANT VIEW// ── ASSISTANT VIEW (sin cambios) ───────────────────────────────────────────
+
+// ── ASSISTANT VIEW (sin cambios) ───────────────────────────────────────────
 function AssistantView({ reports }) {
   const [msgs, setMsgs] = useState([
     { role: "assistant", text: "Hola, soy tu asistente de accesibilidad en Tijuana. Puedo decirte qué barreras hay cerca, sugerir rutas accesibles o ayudarte a encontrar lugares con rampas, baños accesibles, transporte SITT, etc." },
@@ -800,34 +803,7 @@ function AssistantView({ reports }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [gps, setGps] = useState(null);
-  const [listeningAI, setListeningAI] = useState(false);
-  const [speakingIdx, setSpeakingIdx] = useState(null);
-  const recogAIRef = useRef(null);
   const endRef = useRef(null);
-
-  const startVoiceInput = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return alert("Usa Chrome para reconocimiento de voz.");
-    const r = new SR(); r.lang = "es-MX"; r.interimResults = false;
-    r.onresult = (e) => {
-      const txt = e.results[0][0].transcript;
-      setInput(txt);
-      setTimeout(() => send(txt), 300);
-    };
-    r.onerror = () => setListeningAI(false);
-    r.onend = () => setListeningAI(false);
-    recogAIRef.current = r; r.start(); setListeningAI(true);
-  };
-
-  const speakMsg = (text, idx) => {
-    if (speakingIdx === idx) { window.speechSynthesis?.cancel(); setSpeakingIdx(null); return; }
-    window.speechSynthesis?.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = "es-MX"; u.rate = 1.0;
-    u.onend = () => setSpeakingIdx(null);
-    setSpeakingIdx(idx);
-    window.speechSynthesis.speak(u);
-  };
 
   useEffect(() => { getGps().then(setGps); }, []);
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs]);
@@ -872,28 +848,15 @@ Pregunta del usuario: "${q}"` }] }] }),
           return (
             <div key={i} style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start", margin: "6px 0", alignItems: "flex-end", gap: 6 }}>
               {!isUser && <div style={{ width: 28, height: 28, borderRadius: "50%", background: B_TINT, display: "grid", placeItems: "center", flexShrink: 0 }}><Bot size={14} color={B} /></div>}
-              <div style={{ maxWidth: "76%", display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{
-                  padding: "9px 14px",
-                  borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  fontSize: 14, lineHeight: 1.45,
-                  background: isUser ? B : "#fff", color: isUser ? "#fff" : INK,
-                  boxShadow: isUser ? "0 2px 8px rgba(105,28,50,0.18)" : "0 1px 2px rgba(0,0,0,0.06)",
-                  whiteSpace: "pre-wrap",
-                  border: isUser ? "none" : "1px solid rgba(60,60,67,0.06)",
-                }}>{m.text}</div>
-                {!isUser && (
-                  <button onClick={() => speakMsg(m.text, i)} className="tap" style={{
-                    alignSelf: "flex-start", background: "transparent",
-                    border: `1px solid ${HAIRLINE}`, borderRadius: 999, padding: "3px 9px",
-                    fontSize: 11, color: speakingIdx === i ? B : INK_3, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 4, fontWeight: 500,
-                    outline: speakingIdx === i ? `1px solid ${B}` : "none",
-                  }}>
-                    <Volume2 size={11} /> {speakingIdx === i ? "Detener" : "Escuchar"}
-                  </button>
-                )}
-              </div>
+              <div style={{
+                maxWidth: "76%", padding: "9px 14px",
+                borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                fontSize: 14, lineHeight: 1.45,
+                background: isUser ? B : "#fff", color: isUser ? "#fff" : INK,
+                boxShadow: isUser ? "0 2px 8px rgba(105,28,50,0.18)" : "0 1px 2px rgba(0,0,0,0.06)",
+                whiteSpace: "pre-wrap",
+                border: isUser ? "none" : "1px solid rgba(60,60,67,0.06)",
+              }}>{m.text}</div>
             </div>
           );
         })}
@@ -913,15 +876,7 @@ Pregunta del usuario: "${q}"` }] }] }),
         </div>
       )}
       <div style={{ padding: 10, borderTop: `1px solid ${HAIRLINE}`, background: "rgba(255,255,255,0.85)", WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)", display: "flex", gap: 8 }}>
-        <button onClick={startVoiceInput} disabled={listeningAI} className="tap" style={{
-          background: listeningAI ? RED : "rgba(60,60,67,0.08)", color: listeningAI ? "#fff" : INK_2,
-          border: "none", borderRadius: "50%", width: 40, height: 40,
-          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0,
-          animation: listeningAI ? "pulseRing 1.4s infinite" : "none",
-        }}>
-          <Mic size={16} />
-        </button>
-        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={listeningAI ? "Escuchando…" : "Escribe o habla tu pregunta…"}
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Escribe tu pregunta…"
           style={{ flex: 1, padding: "10px 14px", border: "1px solid rgba(60,60,67,0.18)", borderRadius: 22, fontSize: 14, outline: "none", background: SURFACE_2, color: INK, fontFamily: FONT }} />
         <button onClick={() => send()} disabled={busy || !input.trim()} className="tap" style={{
           background: input.trim() ? B : "rgba(60,60,67,0.2)", color: "#fff", border: "none",
@@ -1297,22 +1252,8 @@ function CuadrillasDesktop({ reports }) {
         </Panel>
       </div>
 
-      <div style={{ background: B_TINT, borderRadius: 12, padding: 14, fontSize: 12, color: INK_2, marginTop: 14, lineHeight: 1.5, display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <b style={{ color: B }}>Algoritmo:</b> TSP nearest-neighbor (demo). En producción: <b>Route Optimization API</b> (VRP) de Google Cloud — minimiza tiempo total y prioriza urgentes. Ahorro típico: 30-40% vs. orden de reporte.
-        </div>
-        {ruta.length > 1 && (
-          <button className="tap" onClick={() => {
-            const waypoints = ruta.slice(0, 10).map(p => `${p.lat},${p.lng}`).join("/");
-            window.open(`https://www.google.com/maps/dir/${waypoints}`, "_blank");
-          }} style={{
-            background: B, color: "#fff", border: "none", borderRadius: 10,
-            padding: "10px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-          }}>
-            <Navigation size={13} /> Navegar en Maps
-          </button>
-        )}
+      <div style={{ background: B_TINT, borderRadius: 12, padding: 14, fontSize: 12, color: INK_2, marginTop: 14, lineHeight: 1.5 }}>
+        <b style={{ color: B }}>Algoritmo:</b> TSP nearest-neighbor (demo). En producción: <b>Route Optimization API</b> (VRP) de Google Cloud — minimiza tiempo total y prioriza urgentes. Ahorro típico: 30-40% vs. orden de reporte.
       </div>
     </div>
   );
@@ -1346,7 +1287,8 @@ function CuadrillasPhone({ reports }) {
 // ── BUILDING BLOCKS ────────────────────────────────────────────────────────
 function Frame({ children }) {
   return (
-    <div style={{ maxWidth: 430, margin: "0 auto", height: "100vh", background: SURFACE_2, display: "flex", flexDirection: "column", boxShadow: "0 0 60px rgba(0,0,0,0.04)", fontFamily: FONT, overflow: "hidden" }}>
+    <div style={{ maxWidth: 430, margin: "0 auto", height: "100vh", background: SURFACE_2, display: "flex", flexDirection: "column", boxShadow: "0 0 60px rgba(0,0,0,0.04)", fontFamily: FONT }}>
+      
       {children}
     </div>
   );
@@ -1607,8 +1549,7 @@ function seedDemoReports() {
   return out;
 }
 
-
-// ── NAVEGACIÓN TURN-BY-TURN (voz + GPS continuo + avisos de barreras) ──────
+// Habla en español-MX, cancelando lo anterior para no traslapar
 function speak(text) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   window.speechSynthesis.cancel();
@@ -1619,15 +1560,7 @@ function speak(text) {
   window.speechSynthesis.speak(u);
 }
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve((r.result || "").toString().split(",")[1]);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
+// Trae los steps con maneuvers desde Routes API v2
 async function fetchSteps(origin, dest) {
   try {
     const res = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
@@ -1635,7 +1568,7 @@ async function fetchSteps(origin, dest) {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": MAPS_KEY,
-        "X-Goog-FieldMask": "routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.endLocation",
+        "X-Goog-FieldMask": "routes.legs.steps.navigationInstruction,routes.legs.steps.distanceMeters,routes.legs.steps.startLocation,routes.legs.steps.endLocation,routes.legs.steps.polyline",
       },
       body: JSON.stringify({
         origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lng } } },
@@ -1652,6 +1585,7 @@ async function fetchSteps(origin, dest) {
   }
 }
 
+// Ícono SVG del marcador "tu posición" con dirección (flecha rotada)
 function userMarkerIcon(heading) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
     <circle cx="22" cy="22" r="20" fill="rgba(0,122,255,0.18)" />
@@ -1672,117 +1606,24 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [arrived, setArrived] = useState(false);
   const [mapInstance, setMapInstance] = useState(null);
-  const [cameraOn, setCameraOn] = useState(false);
-  const [scanStatus, setScanStatus] = useState("idle"); // idle | scanning | alert
-  const [lastAlert, setLastAlert] = useState(null);
   const watchIdRef = useRef(null);
   const announcedRef = useRef(new Set());
   const userMarkerRef = useRef(null);
   const polylineRef = useRef(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const scanIntervalRef = useRef(null);
-  const lastAnalysisRef = useRef(0);
 
-  // Activar / desactivar cámara trasera
-  useEffect(() => {
-    if (!cameraOn) {
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-      if (scanIntervalRef.current) { clearInterval(scanIntervalRef.current); scanIntervalRef.current = null; }
-      setScanStatus("idle");
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-        }
-        speak("Modo cámara activo. Estoy mirando el camino contigo.");
-        // Polling cada 3 seg
-        scanIntervalRef.current = setInterval(scanFrame, 3500);
-      } catch (err) {
-        console.error("camera:", err);
-        speak("No pude activar la cámara. Verifica los permisos.");
-        setCameraOn(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [cameraOn]);
-
-  // Cleanup cámara al desmontar
-  useEffect(() => () => {
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-  }, []);
-
-  // Capturar frame + mandar a Gemini Vision
-  const scanFrame = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    if (Date.now() - lastAnalysisRef.current < 3000) return; // throttle
-    lastAnalysisRef.current = Date.now();
-    const v = videoRef.current, c = canvasRef.current;
-    if (!v.videoWidth) return;
-    c.width = 640; c.height = Math.round(640 * v.videoHeight / v.videoWidth);
-    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-    const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.7));
-    if (!blob) return;
-    setScanStatus("scanning");
-    try {
-      const base64 = await blobToBase64(blob);
-      const res = await fetch("https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-2.5-flash:generateContent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [
-            { inlineData: { mimeType: "image/jpeg", data: base64 } },
-            { text: `Eres asistente de accesibilidad. Esta imagen viene de la cámara trasera de una persona caminando con discapacidad motriz o visual en Tijuana. Si ves una barrera de accesibilidad INMINENTE en su camino (escaleras, banqueta rota, hueco, poste en banqueta, falta de rampa, obstáculo, vehículo en banqueta, desnivel pronunciado), responde EXACTAMENTE así:\nALERTA: [una sola frase de 8 palabras máximo, en español, describiendo qué evitar]\n\nSi NO hay barrera inminente, responde solo: OK\n\nNo expliques. No agregues nada más. Solo "ALERTA: ..." o "OK".` }
-          ]}],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 40 },
-        }),
-      });
-      const data = await res.json();
-      const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || "OK").trim();
-      if (text.toUpperCase().startsWith("ALERTA")) {
-        const msg = text.replace(/^ALERTA:?\s*/i, "");
-        // Evitar alertar lo mismo dos veces seguidas
-        if (msg !== lastAlert) {
-          setLastAlert(msg);
-          setScanStatus("alert");
-          speak("Cuidado. " + msg);
-          setTimeout(() => setScanStatus("idle"), 3500);
-        } else {
-          setScanStatus("idle");
-        }
-      } else {
-        setScanStatus("idle");
-      }
-    } catch (e) {
-      console.error("scan:", e);
-      setScanStatus("idle");
-    }
-  };
-
+  // Cargar steps
   useEffect(() => {
     fetchSteps(origin, dest).then((s) => {
       setSteps(s);
       if (s[0]?.navigationInstruction?.instructions) {
-        speak("Iniciando navegación. " + s[0].navigationInstruction.instructions.replace(/<[^>]*>/g, ""));
+        speak("Iniciando navegación. " + s[0].navigationInstruction.instructions);
       } else {
         speak("Iniciando navegación accesible.");
       }
     });
   }, [origin, dest]);
 
+  // watchPosition continuo
   useEffect(() => {
     if (!navigator.geolocation) return;
     watchIdRef.current = navigator.geolocation.watchPosition(
@@ -1799,6 +1640,7 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
     return () => { if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current); window.speechSynthesis?.cancel(); };
   }, []);
 
+  // Centrar mapa en usuario + actualizar marker
   useEffect(() => {
     if (!mapInstance || !userPos) return;
     mapInstance.panTo(userPos);
@@ -1812,6 +1654,7 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
     }
   }, [userPos, heading, mapInstance]);
 
+  // Dibujar la ruta
   useEffect(() => {
     if (!mapInstance || !path?.length) return;
     if (polylineRef.current) polylineRef.current.setMap(null);
@@ -1821,27 +1664,34 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
     return () => { polylineRef.current?.setMap(null); };
   }, [mapInstance, path]);
 
+  // Avisos: próximo paso + barreras cercanas + llegada
   useEffect(() => {
     if (!userPos || arrived) return;
+
+    // ¿Llegamos?
     const dDest = distH(userPos, dest);
     if (dDest < 20) {
       speak("Has llegado a tu destino.");
       setArrived(true);
       return;
     }
+
+    // Avisar próximo paso cuando estás cerca de su inicio
     if (steps[currentStep]) {
       const startLoc = steps[currentStep].startLocation?.latLng;
       if (startLoc) {
         const dStep = distH(userPos, { lat: startLoc.latitude, lng: startLoc.longitude });
         const key = `step-${currentStep}`;
         if (dStep < 25 && !announcedRef.current.has(key)) {
-          const text = (steps[currentStep].navigationInstruction?.instructions || "Continúa derecho").replace(/<[^>]*>/g, "");
+          const text = steps[currentStep].navigationInstruction?.instructions || "Continúa derecho";
           speak(text);
           announcedRef.current.add(key);
           setTimeout(() => setCurrentStep((s) => s + 1), 1000);
         }
       }
     }
+
+    // Avisar barreras severas en ~80m
     reports.forEach((r) => {
       if ((r.severidad || 0) < 4 || !r.lat || !r.lng) return;
       const key = `barrier-${r.id}`;
@@ -1854,11 +1704,12 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
     });
   }, [userPos, steps, currentStep, dest, reports, arrived]);
 
-  const currentInstruction = (steps[currentStep]?.navigationInstruction?.instructions || (arrived ? "Has llegado" : "Continúa derecho")).replace(/<[^>]*>/g, "");
+  const currentInstruction = steps[currentStep]?.navigationInstruction?.instructions || (arrived ? "Has llegado" : "Continúa derecho");
   const distRemaining = userPos ? Math.round(distH(userPos, dest)) : 0;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 500, display: "flex", flexDirection: "column" }}>
+      {/* Banner superior con instrucción actual */}
       <div style={{
         background: B, color: "#fff", padding: "14px 16px",
         display: "flex", alignItems: "flex-start", gap: 12,
@@ -1872,7 +1723,8 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
           <div style={{ fontSize: 10, opacity: 0.75, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>
             {arrived ? "Has llegado" : "Siguiente paso"}
           </div>
-          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, marginTop: 2 }}>{currentInstruction}</div>
+          <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.3, marginTop: 2 }}
+            dangerouslySetInnerHTML={{ __html: currentInstruction }} />
           <div style={{ fontSize: 11, opacity: 0.78, marginTop: 4 }}>
             {distRemaining}m al destino · paso {Math.min(currentStep + 1, steps.length || 1)}/{steps.length || "?"}
           </div>
@@ -1886,45 +1738,8 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
         </button>
       </div>
 
+      {/* Mapa fullscreen */}
       <div style={{ flex: 1, position: "relative" }}>
-        {/* Cámara como capa superior cuando está activa */}
-        {cameraOn && (
-          <div style={{ position: "absolute", inset: 0, background: "#000", zIndex: 10 }}>
-            <video ref={videoRef} playsInline muted autoPlay style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-            <canvas ref={canvasRef} style={{ display: "none" }} />
-
-            {/* Status pill scanning / alert */}
-            <div style={{
-              position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
-              display: "flex", alignItems: "center", gap: 8,
-              background: scanStatus === "alert" ? RED : "rgba(0,0,0,0.55)",
-              color: "#fff", padding: "8px 14px", borderRadius: 999,
-              fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
-              WebkitBackdropFilter: "blur(10px)", backdropFilter: "blur(10px)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              animation: scanStatus === "alert" ? "pulseRing 1.2s infinite" : "none",
-            }}>
-              {scanStatus === "scanning" && <><Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} /> ANALIZANDO…</>}
-              {scanStatus === "alert"    && <><AlertTriangle size={12} /> CUIDADO: {lastAlert}</>}
-              {scanStatus === "idle"     && <><Eye size={12} /> GEMINI VIGILANDO</>}
-            </div>
-
-            {/* Mini-mapa PIP en esquina */}
-            <div style={{
-              position: "absolute", top: 60, right: 12,
-              width: 110, height: 110, borderRadius: 14, overflow: "hidden",
-              border: "2px solid #fff", boxShadow: "0 6px 18px rgba(0,0,0,0.4)",
-            }}>
-              <GoogleMap mapContainerStyle={{ width: "100%", height: "100%" }}
-                center={userPos || origin || TIJUANA_CENTER} zoom={17}
-                options={{ disableDefaultUI: true, gestureHandling: "none", styles: APPLE_MAP_STYLE }}
-                onLoad={setMapInstance}>
-                <MarkerF position={dest} label={{ text: "B", color: "#fff", fontWeight: "700", fontSize: "10px" }} />
-              </GoogleMap>
-            </div>
-          </div>
-        )}
-
         <GoogleMap
           mapContainerStyle={{ width: "100%", height: "100%" }}
           center={userPos || origin || TIJUANA_CENTER}
@@ -1938,42 +1753,38 @@ function NavigationMode({ origin, dest, path, reports, onClose }) {
           ))}
         </GoogleMap>
 
-        {!cameraOn && (
-          <button onClick={() => userPos && mapInstance?.panTo(userPos)} className="tap" style={{
-            position: "absolute", bottom: 110, right: 14,
-            background: "#fff", border: "none", borderRadius: "50%",
-            width: 48, height: 48, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-            display: "grid", placeItems: "center", cursor: "pointer", color: B,
-          }}>
-            <Compass size={22} />
-          </button>
-        )}
+        {/* Recenter button */}
+        <button onClick={() => userPos && mapInstance?.panTo(userPos)} className="tap" style={{
+          position: "absolute", bottom: 110, right: 14,
+          background: "#fff", border: "none", borderRadius: "50%",
+          width: 48, height: 48, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          display: "grid", placeItems: "center", cursor: "pointer", color: B,
+        }}>
+          <Compass size={22} />
+        </button>
       </div>
 
-      <div style={{
+      {/* Footer con stats */}
+      <div className="glass-dark" style={{
         padding: "14px 16px",
         paddingBottom: "max(14px, env(safe-area-inset-bottom))",
-        color: "#fff", display: "flex", gap: 12, alignItems: "center",
-        background: "rgba(28,28,30,0.92)",
-        WebkitBackdropFilter: "blur(20px)", backdropFilter: "blur(20px)",
+        color: "#fff", display: "flex", gap: 14,
+        background: "rgba(28,28,30,0.88)",
       }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Distancia</div>
-          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.4 }}>{(distRemaining / 1000).toFixed(2)} km</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Distancia</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4 }}>{(distRemaining / 1000).toFixed(2)} km</div>
         </div>
-        <div style={{ width: 1, background: "rgba(255,255,255,0.15)", alignSelf: "stretch" }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Min</div>
-          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.4 }}>{Math.max(1, Math.round(distRemaining / 80))}</div>
+        <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Aproximado</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4 }}>{Math.max(1, Math.round(distRemaining / 80))} min</div>
         </div>
-        <button onClick={() => setCameraOn(c => !c)} className="tap" style={{
-          background: cameraOn ? RED : GREEN, color: "#fff", border: "none",
-          borderRadius: 12, padding: "10px 14px", fontSize: 13, fontWeight: 700,
-          cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-          boxShadow: cameraOn ? "0 0 0 6px rgba(179,38,30,0.2)" : "0 4px 14px rgba(46,125,70,0.4)",
-        }}>
-          <Camera size={14} /> {cameraOn ? "Detener" : "Cámara guía"}
-        </button>
+        <div style={{ width: 1, background: "rgba(255,255,255,0.15)" }} />
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, opacity: 0.6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4 }}>Avisos</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: GREEN, letterSpacing: -0.4 }}>{announcedRef.current.size}</div>
+        </div>
       </div>
     </div>
   );
